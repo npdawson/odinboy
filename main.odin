@@ -36,18 +36,17 @@ Registers :: struct {
 	flags: Flags
 }
 
-Flag :: enum {
-	_,
-	_,
-	_,
-	_,
-	C,
-	H,
-	N,
-	Z,
-}
-
 Flags :: bit_set[Flag]
+Flag :: enum {
+	_, // Odin bit_sets start with the least significant bit
+	_,
+	_,
+	_,
+	C, // Carry flag
+	H, // Half carry flag (nibble overflow)
+	N, // uNderflow flag (subtraction)
+	Z, // Zero flag
+}
 
 main :: proc() {
 	regs: Registers
