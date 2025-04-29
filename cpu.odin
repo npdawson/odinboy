@@ -21,6 +21,7 @@ Reg :: enum {
 	E,
 	H,
 	L,
+	AF,
 	BC,
 	DE,
 	HL,
@@ -39,7 +40,7 @@ instructions: [256]Instruction = {
 	{"", 0, 0, 0, nil, .None},
 	{"", 0, 0, 0, nil, .None},
 	{"", 0, 0, 0, nil, .None},
-	{"", 0, 0, 0, nil, .None},
+	{"DEC BC", 1, 2, 0, dec, .BC},
 	{"INC C", 1, 1, 0, inc, .C},
 	{"DEC C", 1, 1, 0, dec, .C},
 	{"LD C, %02x", 2, 2, 0, ld_reg_d8, .C},
@@ -76,13 +77,13 @@ instructions: [256]Instruction = {
 	{"DEC L", 1, 1, 0, nil, .L},
 	{"LD L, %02x", 2, 2, 0, ld_reg_d8, .L},
 	{"", 0, 0, 0, nil, .None},
-	{"", 0, 0, 0, nil, .None},					// 0x30
+	{"JR NC, %02x", 2, 2, 3, nil, .None},					// 0x30
 	{"LD SP, %04x", 3, 3, 0, ld_reg_d16, .SP},
 	{"LD (HL-), A", 1, 2, 0, ld_hl_dec, .None},
-	{"", 0, 0, 0, nil, .None},
-	{"", 0, 0, 0, nil, .None},
-	{"", 0, 0, 0, nil, .None},
-	{"", 0, 0, 0, nil, .None},
+	{"INC SP", 1, 1, 0, inc, .SP},
+	{"INC (HL)", 1, 3, 0, nil, .None},
+	{"DEC (HL)", 1, 3, 0, nil, .None},
+	{"LD (HL), %02x", 2, 3, 0, ld_mem_d8, .None},
 	{"", 0, 0, 0, nil, .None},
 	{"", 0, 0, 0, nil, .None},
 	{"", 0, 0, 0, nil, .None},
@@ -149,8 +150,8 @@ instructions: [256]Instruction = {
 	{"", 0, 0, 0, nil, .None},
 	{"LD (HL), A", 1, 2, 0, ld_mem, .A},
 	{"LD A, B", 1, 1, 0, ld_reg_b, .A},
-	{"", 0, 0, 0, nil, .None},
-	{"", 0, 0, 0, nil, .None},
+	{"LD A, C", 1, 1, 0, ld_reg_c, .A},
+	{"LD A, D", 1, 1, 0, ld_reg_d, .A},
 	{"LD A, E", 1, 1, 0, ld_reg_e, .A},
 	{"LD A, H", 1, 1, 0, ld_reg_h, .A},
 	{"LD A, L", 1, 1, 0, ld_reg_l, .A},
@@ -195,17 +196,17 @@ instructions: [256]Instruction = {
 	{"", 0, 0, 0, nil, .None},
 	{"", 0, 0, 0, nil, .None},
 	{"", 0, 0, 0, nil, .None},
-	{"", 0, 0, 0, nil, .None},
-	{"", 0, 0, 0, nil, .None},
-	{"", 0, 0, 0, nil, .None},
-	{"", 0, 0, 0, nil, .None},
-	{"", 0, 0, 0, nil, .None},
-	{"", 0, 0, 0, nil, .None},
-	{"", 0, 0, 0, nil, .None},
+	{"AND A, A", 1, 1, 0, and, .A},
+	{"XOR A, B", 1, 1, 0, xor, .B},
+	{"XOR A, C", 1, 1, 0, xor, .C},
+	{"XOR A, D", 1, 1, 0, xor, .D},
+	{"XOR A, E", 1, 1, 0, xor, .E},
+	{"XOR A, H", 1, 1, 0, xor, .H},
+	{"XOR A, L", 1, 1, 0, xor, .L},
 	{"", 0, 0, 0, nil, .None},
 	{"XOR A", 1, 1, 0, xor, .A},
 	{"", 0, 0, 0, nil, .None},		// 0xb0
-	{"", 0, 0, 0, nil, .None},
+	{"OR A, C", 1, 1, 0, or, .C},
 	{"", 0, 0, 0, nil, .None},
 	{"", 0, 0, 0, nil, .None},
 	{"", 0, 0, 0, nil, .None},
@@ -258,7 +259,7 @@ instructions: [256]Instruction = {
 	{"", 0, 0, 0, nil, .None},
 	{"", 0, 0, 0, nil, .None},
 	{"", 0, 0, 0, nil, .None},
-	{"", 0, 0, 0, nil, .None},
+	{"AND A, %02x", 2, 2, 0, and_d8, .None},
 	{"", 0, 0, 0, nil, .None},
 	{"", 0, 0, 0, nil, .None},
 	{"", 0, 0, 0, nil, .None},
@@ -273,7 +274,7 @@ instructions: [256]Instruction = {
 	{"", 0, 0, 0, nil, .None},
 	{"DI", 1, 1, 0, di, .None},
 	{"", 0, 0, 0, nil, .None},
-	{"", 0, 0, 0, nil, .None},
+	{"PUSH AF", 1, 4, 0, push, .AF},
 	{"", 0, 0, 0, nil, .None},
 	{"", 0, 0, 0, nil, .None},
 	{"", 0, 0, 0, nil, .None},
@@ -607,6 +608,14 @@ ld_mem :: proc(instr: ^Instruction, gb: ^Gameboy) {
 	gb.cpu.cycles += uint(instr.cycles)
 }
 
+ld_mem_d8 :: proc(instr: ^Instruction, gb: ^Gameboy) {
+	addr := gb.cpu.registers.hl
+	data := read_byte(gb, gb.cpu.registers.pc + 1)
+	write_byte(gb, addr, data)
+	gb.cpu.registers.pc += u16(instr.length)
+	gb.cpu.cycles += uint(instr.cycles)
+}
+
 push :: proc(instr: ^Instruction, gb: ^Gameboy) {
 	data := read_reg16(gb, instr.reg)
 	write_stack_word(gb, data)
@@ -649,6 +658,32 @@ write_stack_byte :: proc(gb: ^Gameboy, data: u8) {
 write_stack_word :: proc(gb: ^Gameboy, data: u16) {
 	write_stack_byte(gb, u8(data >> 8))
 	write_stack_byte(gb, u8(data & 0xff))
+}
+
+and_d8 :: proc(instr: ^Instruction, gb: ^Gameboy) {
+	data := read_byte(gb, gb.cpu.registers.pc + 1)
+	gb.cpu.registers.a &= data
+	gb.cpu.registers.flags = { .H }
+	if gb.cpu.registers.a == 0 { gb.cpu.registers.flags += { .Z } }
+	gb.cpu.registers.pc += u16(instr.length)
+	gb.cpu.cycles += uint(instr.cycles)
+}
+
+and :: proc(instr: ^Instruction, gb: ^Gameboy) {
+	data := read_reg8(gb, instr.reg)
+	gb.cpu.registers.a &= data
+	gb.cpu.registers.flags = { .H }
+	if gb.cpu.registers.a == 0 { gb.cpu.registers.flags += { .Z } }
+	gb.cpu.registers.pc += u16(instr.length)
+	gb.cpu.cycles += uint(instr.cycles)
+}
+
+or :: proc(instr: ^Instruction, gb: ^Gameboy) {
+	data := read_reg8(gb, instr.reg)
+	gb.cpu.registers.a |= data
+	gb.cpu.registers.flags = gb.cpu.registers.a == 0 ? { .Z } : {}
+	gb.cpu.registers.pc += u16(instr.length)
+	gb.cpu.cycles += uint(instr.cycles)
 }
 
 xor :: proc(instr: ^Instruction, gb: ^Gameboy) {
@@ -706,6 +741,8 @@ inc :: proc(instr: ^Instruction, gb: ^Gameboy) {
 		data += 1
 		h = data & 0xf000 != nibble
 		write_reg16(gb, instr.reg, data)
+	case .AF:
+		panic("tried to inc AF, no such instruction")
 	case .None:
 		panic("tried incrementing without a register")
 	}
@@ -736,6 +773,8 @@ dec :: proc(instr: ^Instruction, gb: ^Gameboy) {
 		data -= 1
 		h = data & 0xf000 == nibble
 		write_reg16(gb, instr.reg, data)
+	case .AF:
+		panic("tried to dec AF, no such instruction")
 	case .None:
 		panic("tried incrementing without a register")
 	}
@@ -973,7 +1012,7 @@ read_reg8 :: proc(gb: ^Gameboy, reg: Reg) -> u8 {
 		return gb.cpu.registers.h
 	case .L:
 		return gb.cpu.registers.l
-	case .BC, .DE, .HL, .SP, .None:
+	case .AF, .BC, .DE, .HL, .SP, .None:
 		panic("tried reading 8 bits from a 16-bit register")
 	}
 	return 0
@@ -981,6 +1020,16 @@ read_reg8 :: proc(gb: ^Gameboy, reg: Reg) -> u8 {
 
 read_reg16 :: proc(gb: ^Gameboy, reg: Reg) -> u16 {
 	switch reg {
+	case .AF:
+		flags := gb.cpu.registers.flags
+		a: u16 = gb.cpu.registers.af & 0xff00
+		f: u16
+		if .Z in flags { f += 0x80 }
+		if .N in flags { f += 0x40 }
+		if .H in flags { f += 0x20 }
+		if .C in flags { f += 0x10 }
+		fmt.printfln("read A: %02x, F: %02x", a, f)
+		return a + f
 	case .BC:
 		return gb.cpu.registers.bc
 	case .DE:
@@ -1011,13 +1060,23 @@ write_reg8 :: proc(gb: ^Gameboy, reg: Reg, data: u8) {
 		gb.cpu.registers.h = data
 	case .L:
 		gb.cpu.registers.l = data
-	case .BC, .DE, .HL, .SP, .None:
+	case .AF, .BC, .DE, .HL, .SP, .None:
 		panic("tried writing 16 bits to 8 bit register")
 	}
 }
 
 write_reg16 :: proc(gb: ^Gameboy, reg: Reg, data: u16) {
 	switch reg {
+	case .AF:
+		gb.cpu.registers.a = u8(data >> 8)
+		flags: Flags
+		if data & 0x80 != 0 { flags += { .Z } }
+		if data & 0x40 != 0 { flags += { .N } }
+		if data & 0x20 != 0 { flags += { .H } }
+		if data & 0x10 != 0 { flags += { .C } }
+		gb.cpu.registers.flags = flags
+		fmt.printfln("wrote AF: %04x", data)
+		fmt.println("Flags are now:", flags)
 	case .BC:
 		gb.cpu.registers.bc = data
 	case .DE:

@@ -40,7 +40,7 @@ Registers :: struct {
 	flags: Flags
 }
 
-Flags :: bit_set[Flag]
+Flags :: distinct bit_set[Flag; u8]
 Flag :: enum {
 	_, // Odin bit_sets start with the least significant bit
 	_,
@@ -52,7 +52,7 @@ Flag :: enum {
 	Z, // Zero flag
 }
 
-IFlags :: bit_set[IFlag]
+IFlags :: bit_set[IFlag; u8]
 IFlag :: enum {
 	VBlank,
 	LCDStat,
@@ -187,6 +187,9 @@ main :: proc() {
 	}
 	defer sdl.DestroyAudioStream(gb.audio.stream)
 
+	sdl.PauseAudioStreamDevice(gb.audio.stream)
+	current_sine_sample: int
+
 	sdl.SetRenderDrawColor(renderer, 0, 55, 75, 255)
 	sdl.RenderClear(renderer)
 	sdl.RenderPresent(renderer)
@@ -253,6 +256,19 @@ main :: proc() {
 			c := .C in gb.cpu.registers.flags ? "C" : ""
 			log.debugf(" Flags: %v %v %v %v", z, n, h, c)
 		}
+
+		// min_samples: i32 = 48000 * size_of(f32) / 2
+		// if sdl.GetAudioStreamQueued(gb.audio.stream) < min_samples {
+		// 	samples: [512]f32
+		// 	for &s in samples {
+		// 		freq := 440
+		// 		phase := f32(current_sine_sample) * f32(freq) / 48000
+		// 		s = sdl.sinf(phase * 2 * 3.1415926)
+		// 		current_sine_sample += 1
+		// 	}
+		// 	current_sine_sample %= 48000
+		// 	sdl.PutAudioStreamData(gb.audio.stream, &samples, len(samples))
+		// }
 	}
 }
 
@@ -352,7 +368,7 @@ write_io_reg :: proc(gb: ^Gameboy, addr: u16, data: u8) {
 		log.debugf("no more boot rom!")
 		gb.boot_rom_enabled = false
 	case 0xff40..=0xff6f:
-		log.debugf("\twriting %02x to PPU register %04x", data, addr)
+		// log.debugf("\twriting %02x to PPU register %04x", data, addr)
 		gb.ppu.regs[addr - 0xff40] = data
 	case 0xff0f:
 		write_iflags(gb, data)
