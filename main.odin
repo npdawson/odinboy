@@ -2,6 +2,7 @@ package odinboy
 
 import "core:fmt"
 import "core:log"
+import "core:math"
 import "core:os"
 
 import sdl "vendor:sdl3"
@@ -75,8 +76,10 @@ MBC :: enum u8 {
 
 Cartridge :: struct {
 	mbc: MBC,
-	rom_bank: u8,
+	rom_bank: u16,
+	max_rom_bank: u16,
 	ram_bank: u8,
+	max_ram_bank: u8,
 	ram_enable: bool,
 	adv_bank_mode: bool,
 }
@@ -175,6 +178,7 @@ main :: proc() {
 	gb.memory.boot_rom = boot_rom
 	gb.memory.game_rom = game_rom
 	gb.cart.mbc = cast(MBC)gb.memory.game_rom[0x147]
+	gb.cart.max_rom_bank = u16(math.pow_f32(2, f32(gb.memory.game_rom[0x148]) + 1) - 1)
 
 	if !sdl.Init({.AUDIO, .VIDEO}) {
 		fmt.eprintln("SDL error:", sdl.GetError())
@@ -417,8 +421,9 @@ write_mbc :: proc(gb: ^Gameboy, addr: u16, data: u8) {
 	case 0x0000:
 		gb.cart.ram_enable = (data & 0xf == 0xa ? true : false)
 	case 0x2000:
-		gb.cart.rom_bank = data
-		fmt.println("Switching to bank:", data & 0x1f)
+		bank := u16(data) & gb.cart.max_rom_bank
+		gb.cart.rom_bank = bank
+		fmt.printfln("Switching to bank %v of %v", bank, gb.cart.max_rom_bank)
 	case 0x4000:
 		gb.cart.ram_bank = data
 	case 0x6000:
@@ -429,7 +434,7 @@ write_mbc :: proc(gb: ^Gameboy, addr: u16, data: u8) {
 read_rom :: proc(gb: ^Gameboy, addr: u16) -> byte {
 	new_addr := addr
 	// TODO: implement advanced banking mode
-	if addr >= 0x4000 {
+	if addr >= 0x4000 && gb.cart.rom_bank > 0 {
 		new_addr += 0x4000 * u16(gb.cart.rom_bank - 1)
 	}
 	return gb.memory.game_rom[new_addr]
