@@ -36,18 +36,18 @@ instructions: [256]Instruction = {
 	{"INC B", 1, 1, 0, inc, .B},
 	{"DEC B", 1, 1, 0, dec, .B},
 	{"LD B, %02x", 2, 2, 0, ld_reg_d8, .B},
-	{"", 0, 0, 0, nil, .None},
-	{"", 0, 0, 0, nil, .None},
-	{"", 0, 0, 0, nil, .None},
-	{"", 0, 0, 0, nil, .None},
+	{"RLCA", 1, 1, 0, nil, .None},
+	{"LD (%04x), SP", 3, 5, 0, nil, .SP},
+	{"ADD HL, BC", 1, 2, 0, nil, .None},
+	{"LD A, (BC)", 1, 2, 0, nil, .BC},
 	{"DEC BC", 1, 2, 0, dec, .BC},
 	{"INC C", 1, 1, 0, inc, .C},
 	{"DEC C", 1, 1, 0, dec, .C},
 	{"LD C, %02x", 2, 2, 0, ld_reg_d8, .C},
-	{"", 0, 0, 0, nil, .None},
-	{"", 0, 0, 0, nil, .None},					// 0x10
+	{"RRCA", 1, 1, 0, nil, .None},
+	{"STOP", 1, 1, 0, nil, .None},					// 0x10
 	{"LD DE, %04x", 3, 3, 0, ld_reg_d16, .DE},
-	{"", 0, 0, 0, nil, .None},
+	{"LD (DE), A", 1, 2, 0, ld_mem_a, .DE},
 	{"INC DE", 1, 2, 0, inc, .DE},
 	{"INC D", 1, 1, 0, inc, .D},
 	{"DEC D", 1, 1, 0, dec, .D},
@@ -67,22 +67,22 @@ instructions: [256]Instruction = {
 	{"INC HL", 1, 2, 0, inc, .HL},
 	{"INC H", 1, 1, 0, inc, .H},
 	{"DEC H", 1, 1, 0, dec, .H},
-	{"", 0, 0, 0, nil, .None},
+	{"LD H, %02x", 2, 2, 0, ld_reg_d8, .H},
 	{"", 0, 0, 0, nil, .None},
 	{"JR Z, %02x", 2, 2, 3, jr_z_r8, .None},
 	{"", 0, 0, 0, nil, .None},
-	{"", 0, 0, 0, nil, .None},
-	{"", 0, 0, 0, nil, .None},
-	{"INC L", 1, 1, 0, nil, .L},
-	{"DEC L", 1, 1, 0, nil, .L},
+	{"LD A, (HL+)", 1, 2, 0, ld_a_hl_inc, .None},
+	{"DEC HL", 1, 2, 0, dec, .HL},
+	{"INC L", 1, 1, 0, inc, .L},
+	{"DEC L", 1, 1, 0, dec, .L},
 	{"LD L, %02x", 2, 2, 0, ld_reg_d8, .L},
 	{"", 0, 0, 0, nil, .None},
 	{"JR NC, %02x", 2, 2, 3, nil, .None},					// 0x30
 	{"LD SP, %04x", 3, 3, 0, ld_reg_d16, .SP},
 	{"LD (HL-), A", 1, 2, 0, ld_hl_dec, .None},
 	{"INC SP", 1, 1, 0, inc, .SP},
-	{"INC (HL)", 1, 3, 0, nil, .None},
-	{"DEC (HL)", 1, 3, 0, nil, .None},
+	{"INC (HL)", 1, 3, 0, inc_mem, .None},
+	{"DEC (HL)", 1, 3, 0, dec_mem, .None},
 	{"LD (HL), %02x", 2, 3, 0, ld_mem_d8, .None},
 	{"", 0, 0, 0, nil, .None},
 	{"", 0, 0, 0, nil, .None},
@@ -93,13 +93,13 @@ instructions: [256]Instruction = {
 	{"DEC A", 1, 1, 0, dec, .A},
 	{"LD A, %02x", 2, 2, 0, ld_reg_d8, .A},
 	{"", 0, 0, 0, nil, .None},
-	{"", 0, 0, 0, nil, .None},		// 0x40
-	{"", 0, 0, 0, nil, .None},
-	{"", 0, 0, 0, nil, .None},
-	{"", 0, 0, 0, nil, .None},
-	{"", 0, 0, 0, nil, .None},
-	{"", 0, 0, 0, nil, .None},
-	{"", 0, 0, 0, nil, .None},
+	{"LD B, B", 1, 1, 0, ld_reg_b, .B},		// 0x40
+	{"LD B, C", 1, 1, 0, ld_reg_c, .B},
+	{"LD B, D", 1, 1, 0, ld_reg_d, .B},
+	{"LD B, E", 1, 1, 0, ld_reg_e, .B},
+	{"LD B, H", 1, 1, 0, ld_reg_h, .B},
+	{"LD B, L", 1, 1, 0, ld_reg_l, .B},
+	{"LD B, (HL)", 1, 2, 0, ld_reg_mem, .B},
 	{"LD B, A", 1, 1, 0, ld_reg_a, .B},
 	{"", 0, 0, 0, nil, .None},
 	{"", 0, 0, 0, nil, .None},
@@ -107,7 +107,7 @@ instructions: [256]Instruction = {
 	{"", 0, 0, 0, nil, .None},
 	{"", 0, 0, 0, nil, .None},
 	{"", 0, 0, 0, nil, .None},
-	{"", 0, 0, 0, nil, .None},
+	{"LD C, (HL)", 1, 2, 0, ld_reg_mem, .C},
 	{"LD C, A", 1, 1, 0, ld_reg_a, .C},
 	{"", 0, 0, 0, nil, .None},		// 0x50
 	{"", 0, 0, 0, nil, .None},
@@ -125,22 +125,22 @@ instructions: [256]Instruction = {
 	{"", 0, 0, 0, nil, .None},
 	{"", 0, 0, 0, nil, .None},
 	{"", 0, 0, 0, nil, .None},
-	{"", 0, 0, 0, nil, .None},		// 0x60
-	{"", 0, 0, 0, nil, .None},
-	{"", 0, 0, 0, nil, .None},
-	{"", 0, 0, 0, nil, .None},
-	{"", 0, 0, 0, nil, .None},
-	{"", 0, 0, 0, nil, .None},
+	{"LD H, B", 1, 1, 0, ld_reg_b, .H},		// 0x60
+	{"LD H, C", 1, 1, 0, ld_reg_c, .H},
+	{"LD H, D", 1, 1, 0, ld_reg_d, .H},
+	{"LD H, E", 1, 1, 0, ld_reg_e, .H},
+	{"LD H, H", 1, 1, 0, ld_reg_h, .H},
+	{"LD H, L", 1, 1, 0, ld_reg_l, .H},
 	{"", 0, 0, 0, nil, .None},
 	{"LD H, A", 1, 1, 0, ld_reg_a, .H},
+	{"LD L, B", 1, 1, 0, ld_reg_b, .L},
+	{"LD L, C", 1, 1, 0, ld_reg_c, .L},
+	{"LD L, D", 1, 1, 0, ld_reg_d, .L},
+	{"LD L, E", 1, 1, 0, ld_reg_e, .L},
+	{"LD L, H", 1, 1, 0, ld_reg_h, .L},
+	{"LD L, L", 1, 1, 0, ld_reg_l, .L},
 	{"", 0, 0, 0, nil, .None},
-	{"", 0, 0, 0, nil, .None},
-	{"", 0, 0, 0, nil, .None},
-	{"", 0, 0, 0, nil, .None},
-	{"", 0, 0, 0, nil, .None},
-	{"", 0, 0, 0, nil, .None},
-	{"", 0, 0, 0, nil, .None},
-	{"", 0, 0, 0, nil, .None},
+	{"LD L, A", 1, 1, 0, ld_reg_a, .L},
 	{"", 0, 0, 0, nil, .None},		// 0x70
 	{"", 0, 0, 0, nil, .None},
 	{"", 0, 0, 0, nil, .None},
@@ -155,7 +155,7 @@ instructions: [256]Instruction = {
 	{"LD A, E", 1, 1, 0, ld_reg_e, .A},
 	{"LD A, H", 1, 1, 0, ld_reg_h, .A},
 	{"LD A, L", 1, 1, 0, ld_reg_l, .A},
-	{"", 0, 0, 0, nil, .None},
+	{"LD A, (HL)", 1, 2, 0, ld_reg_mem, .A},
 	{"", 0, 0, 0, nil, .None},
 	{"", 0, 0, 0, nil, .None},		// 0x80
 	{"", 0, 0, 0, nil, .None},
@@ -225,13 +225,13 @@ instructions: [256]Instruction = {
 	{"POP BC", 1, 3, 0, pop, .BC},
 	{"", 0, 0, 0, nil, .None},
 	{"JP %04x", 3, 4, 0, jp, .None},
-	{"", 0, 0, 0, nil, .None},
+	{"CALL NZ, %04x", 3, 3, 6, call_nz, .None},
 	{"PUSH BC", 1, 4, 0, push, .BC},
 	{"", 0, 0, 0, nil, .None},
 	{"", 0, 0, 0, nil, .None},
 	{"", 0, 0, 0, nil, .None},
 	{"RET", 1, 4, 0, ret, .None},
-	{"", 0, 0, 0, nil, .None},
+	{"JP Z, %04x", 3, 3, 4, jp_z, .None},
 	{"CB", 1, 1, 0, cb, .None},
 	{"", 0, 0, 0, nil, .None},
 	{"Call %04x", 3, 6, 0, call, .None},
@@ -271,16 +271,16 @@ instructions: [256]Instruction = {
 	{"", 0, 0, 0, nil, .None},
 	{"LD A, (FF00+%02x)", 2, 3, 0, ld_a_ff_d8, .None},		// 0xf0
 	{"POP AF", 1, 3, 0, pop, .AF},
-	{"", 0, 0, 0, nil, .None},
+	{"LD A, (FF00+C)", 1, 2, 0, ld_a_ff_c, .None},
 	{"DI", 1, 1, 0, di, .None},
 	{"", 0, 0, 0, nil, .None},
 	{"PUSH AF", 1, 4, 0, push, .AF},
-	{"", 0, 0, 0, nil, .None},
-	{"", 0, 0, 0, nil, .None},
-	{"", 0, 0, 0, nil, .None},
-	{"", 0, 0, 0, nil, .None},
-	{"", 0, 0, 0, nil, .None},
-	{"EI", 1, 1, 0, nil, .None},
+	{"OR A, d8", 2, 2, 0, nil, .None},
+	{"RST 30h", 1, 4, 0, nil, .None},
+	{"LD HL, SP+%02x", 2, 3, 0, nil, .None},
+	{"LD SP, HL", 1, 2, 0, nil, .None},
+	{"LD A, (%04)", 3, 4, 0, ld_a_d16, .None},
+	{"EI", 1, 1, 0, ei, .None},
 	{"", 0, 0, 0, nil, .None},
 	{"", 0, 0, 0, nil, .None},
 	{"CP A, %02x", 2, 2, 0, cp_d8, .None},
@@ -600,6 +600,13 @@ ld_d16_a :: proc(instr: ^Instruction, gb: ^Gameboy) {
 	gb.cpu.cycles += uint(instr.cycles)
 }
 
+ld_a_d16 :: proc(instr: ^Instruction, gb: ^Gameboy) {
+	addr := read_word(gb, gb.cpu.registers.pc + 1)
+	gb.cpu.registers.a = read_byte(gb, addr)
+	gb.cpu.registers.pc += u16(instr.length)
+	gb.cpu.cycles += uint(instr.cycles)
+}
+
 ld_mem :: proc(instr: ^Instruction, gb: ^Gameboy) {
 	addr := gb.cpu.registers.hl
 	data := read_reg8(gb, instr.reg)
@@ -636,6 +643,18 @@ call :: proc(instr: ^Instruction, gb: ^Gameboy) {
 	write_stack_word(gb, gb.cpu.registers.pc)
 	gb.cpu.registers.pc = addr
 	gb.cpu.cycles += uint(instr.cycles)
+}
+
+call_nz :: proc(instr: ^Instruction, gb: ^Gameboy) {
+	addr := read_word(gb, gb.cpu.registers.pc + 1)
+	gb.cpu.registers.pc += u16(instr.length)
+	if !(.Z in gb.cpu.registers.flags) {
+		write_stack_word(gb, gb.cpu.registers.pc)
+		gb.cpu.registers.pc = addr
+		gb.cpu.cycles += uint(instr.jump_cycles)
+	} else {
+		gb.cpu.cycles += uint(instr.cycles)
+	}
 }
 
 ret :: proc(instr: ^Instruction, gb: ^Gameboy) {
@@ -690,6 +709,14 @@ xor :: proc(instr: ^Instruction, gb: ^Gameboy) {
 	data := read_reg8(gb, instr.reg)
 	gb.cpu.registers.a ~= data
 	gb.cpu.registers.flags = gb.cpu.registers.a == 0 ? { .Z } : {}
+	gb.cpu.registers.pc += u16(instr.length)
+	gb.cpu.cycles += uint(instr.cycles)
+}
+
+ld_a_hl_inc :: proc(instr: ^Instruction, gb: ^Gameboy) {
+	addr := gb.cpu.registers.hl
+	gb.cpu.registers.hl += 1
+	gb.cpu.registers.a = read_byte(gb, addr)
 	gb.cpu.registers.pc += u16(instr.length)
 	gb.cpu.cycles += uint(instr.cycles)
 }
@@ -787,6 +814,38 @@ dec :: proc(instr: ^Instruction, gb: ^Gameboy) {
 	gb.cpu.registers.flags = flags
 	gb.cpu.cycles += uint(instr.cycles)
 	gb.cpu.registers.pc += u16(instr.length)
+}
+
+inc_mem :: proc(instr: ^Instruction, gb: ^Gameboy) {
+	addr := read_reg16(gb, .HL)
+	data := read_byte(gb, addr)
+	h := (data & 0xf) + 1 > 0xf
+	data += 1
+	write_byte(gb, addr, data)
+	c := .C in gb.cpu.registers.flags
+	flags := Flags { }
+	if data == 0 { flags += { .Z } }
+	if h { flags += { .H } }
+	if .C in gb.cpu.registers.flags { flags += { .C } }
+	gb.cpu.registers.flags = flags
+	gb.cpu.registers.pc += u16(instr.length)
+	gb.cpu.cycles += uint(instr.cycles)
+}
+
+dec_mem :: proc(instr: ^Instruction, gb: ^Gameboy) {
+	addr := read_reg16(gb, .HL)
+	data := read_byte(gb, addr)
+	h := i8(data & 0xf) - 1 < 0
+	data -= 1
+	write_byte(gb, addr, data)
+	c := .C in gb.cpu.registers.flags
+	flags := Flags { .N }
+	if data == 0 { flags += { .Z } }
+	if h { flags += { .H } }
+	if .C in gb.cpu.registers.flags { flags += { .C } }
+	gb.cpu.registers.flags = flags
+	gb.cpu.registers.pc += u16(instr.length)
+	gb.cpu.cycles += uint(instr.cycles)
 }
 
 add :: proc(instr: ^Instruction, gb: ^Gameboy) {
@@ -903,6 +962,17 @@ jp :: proc(instr: ^Instruction, gb: ^Gameboy) {
 	gb.cpu.cycles += uint(instr.cycles)
 }
 
+jp_z :: proc(instr: ^Instruction, gb: ^Gameboy) {
+	addr := read_word(gb, gb.cpu.registers.pc + 1)
+	gb.cpu.registers.pc += u16(instr.length)
+	if (.Z in gb.cpu.registers.flags) {
+		gb.cpu.registers.pc = addr
+		gb.cpu.cycles += uint(instr.jump_cycles)
+	} else {
+		gb.cpu.cycles += uint(instr.cycles)
+	}
+}
+
 ld_reg_d8 :: proc(instr: ^Instruction, gb: ^Gameboy) {
 	addr := gb.cpu.registers.pc + 1
 	data := read_byte(gb, addr)
@@ -960,10 +1030,25 @@ ld_reg_l :: proc(instr: ^Instruction, gb: ^Gameboy) {
 	gb.cpu.cycles += uint(instr.cycles)
 }
 
+ld_reg_mem :: proc(instr: ^Instruction, gb: ^Gameboy) {
+	addr := read_reg16(gb, .HL)
+	data := read_byte(gb, addr)
+	write_reg8(gb, instr.reg, data)
+	gb.cpu.registers.pc += u16(instr.length)
+	gb.cpu.cycles += uint(instr.cycles)
+}
+
 ld_ff_c_a :: proc(instr: ^Instruction, gb: ^Gameboy) {
 	addr := 0xff00 + u16(gb.cpu.registers.c)
 	data := gb.cpu.registers.a
 	write_byte(gb, addr, data)
+	gb.cpu.registers.pc += u16(instr.length)
+	gb.cpu.cycles += uint(instr.cycles)
+}
+
+ld_a_ff_c :: proc(instr: ^Instruction, gb: ^Gameboy) {
+	addr := 0xff00 + u16(gb.cpu.registers.c)
+	gb.cpu.registers.a = read_byte(gb, addr)
 	gb.cpu.registers.pc += u16(instr.length)
 	gb.cpu.cycles += uint(instr.cycles)
 }
