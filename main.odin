@@ -9,7 +9,10 @@ import sdl "vendor:sdl3"
 Registers :: struct {
 	using _: struct #raw_union {
 		using _: struct {
-			f: u8,
+			using _: struct #raw_union {
+				f: u8,
+				flags: Flags,
+			},
 			a: u8,
 		},
 		af: u16,
@@ -37,7 +40,6 @@ Registers :: struct {
 	},
 	sp: u16,
 	pc: u16,
-	flags: Flags
 }
 
 Flags :: distinct bit_set[Flag; u8]

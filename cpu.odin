@@ -1021,15 +1021,7 @@ read_reg8 :: proc(gb: ^Gameboy, reg: Reg) -> u8 {
 read_reg16 :: proc(gb: ^Gameboy, reg: Reg) -> u16 {
 	switch reg {
 	case .AF:
-		flags := gb.cpu.registers.flags
-		a: u16 = gb.cpu.registers.af & 0xff00
-		f: u16
-		if .Z in flags { f += 0x80 }
-		if .N in flags { f += 0x40 }
-		if .H in flags { f += 0x20 }
-		if .C in flags { f += 0x10 }
-		fmt.printfln("read A: %02x, F: %02x", a, f)
-		return a + f
+		return gb.cpu.registers.af
 	case .BC:
 		return gb.cpu.registers.bc
 	case .DE:
@@ -1068,15 +1060,7 @@ write_reg8 :: proc(gb: ^Gameboy, reg: Reg, data: u8) {
 write_reg16 :: proc(gb: ^Gameboy, reg: Reg, data: u16) {
 	switch reg {
 	case .AF:
-		gb.cpu.registers.a = u8(data >> 8)
-		flags: Flags
-		if data & 0x80 != 0 { flags += { .Z } }
-		if data & 0x40 != 0 { flags += { .N } }
-		if data & 0x20 != 0 { flags += { .H } }
-		if data & 0x10 != 0 { flags += { .C } }
-		gb.cpu.registers.flags = flags
-		fmt.printfln("wrote AF: %04x", data)
-		fmt.println("Flags are now:", flags)
+		gb.cpu.registers.af = data
 	case .BC:
 		gb.cpu.registers.bc = data
 	case .DE:
