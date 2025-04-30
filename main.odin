@@ -63,6 +63,24 @@ IFlag :: enum {
 	Joypad,
 }
 
+MBC :: enum u8 {
+	ROM,
+	MBC1,
+	MBC1RAM,
+	MBC1RAMBAT,
+	MBC2,
+	MBC2BAT,
+	// TODO finish this
+}
+
+Cartridge :: struct {
+	mbc: MBC,
+	rom_bank: u8,
+	ram_bank: u8,
+	ram_enable: bool,
+	adv_bank_mode: bool,
+}
+
 Memory :: struct {
 	boot_rom: []byte,
 	game_rom: []byte,
@@ -118,6 +136,7 @@ Gameboy :: struct {
 	cpu: CPU,
 	ppu: PPU,
 	memory: Memory,
+	cart: Cartridge,
 
 	serial: Serial,
 	timer: Timer,
@@ -155,6 +174,7 @@ main :: proc() {
 	gb.boot_rom_enabled = true
 	gb.memory.boot_rom = boot_rom
 	gb.memory.game_rom = game_rom
+	gb.cart.mbc = cast(MBC)gb.memory.game_rom[0x147]
 
 	if !sdl.Init({.AUDIO, .VIDEO}) {
 		fmt.eprintln("SDL error:", sdl.GetError())
@@ -278,9 +298,9 @@ read_byte :: proc(gb: ^Gameboy, addr: u16) -> u8 {
 	boot := gb.boot_rom_enabled
 	switch addr {
 	case 0x00..=0xff:
-		return boot ? gb.memory.boot_rom[addr] : gb.memory.game_rom[addr]
+		return boot ? gb.memory.boot_rom[addr] : read_rom(gb, addr)
 	case 0x100..=0x7fff:
-		return gb.memory.game_rom[addr]
+		return read_rom(gb, addr)
 	case 0x8000..=0x9FFF:
 		return gb.memory.video_ram[addr-0x8000]
 	case 0xA000..=0xBFFF:
@@ -308,6 +328,8 @@ read_word :: proc(gb: ^Gameboy, addr: u16) -> u16 {
 
 write_byte :: proc(gb: ^Gameboy, addr: u16, data: byte) {
 	switch addr {
+	case 0x0000..=0x7fff:
+		write_mbc(gb, addr, data)
 	case 0x8000..=0x9FFF:
 		gb.memory.video_ram[addr-0x8000] = data
 	case 0xA000..=0xBFFF:
@@ -388,4 +410,27 @@ write_iflags :: proc(gb: ^Gameboy, data: u8) {
 	if data & 0x8 != 0 { flags += { .Serial } }
 	if data & 0x10 != 0 { flags += { .Joypad } }
 	gb.cpu.interrupt_flags = flags
+}
+
+write_mbc :: proc(gb: ^Gameboy, addr: u16, data: u8) {
+	switch addr {
+	case 0x0000:
+		gb.cart.ram_enable = (data & 0xf == 0xa ? true : false)
+	case 0x2000:
+		gb.cart.rom_bank = data
+		fmt.println("Switching to bank:", data & 0x1f)
+	case 0x4000:
+		gb.cart.ram_bank = data
+	case 0x6000:
+		gb.cart.adv_bank_mode = (data > 0 ? true : false)
+	}
+}
+
+read_rom :: proc(gb: ^Gameboy, addr: u16) -> byte {
+	new_addr := addr
+	// TODO: implement advanced banking mode
+	if addr >= 0x4000 {
+		new_addr += 0x4000 * u16(gb.cart.rom_bank - 1)
+	}
+	return gb.memory.game_rom[new_addr]
 }
