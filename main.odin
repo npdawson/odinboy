@@ -311,6 +311,9 @@ read_byte :: proc(gb: ^Gameboy, addr: u16) -> u8 {
 		return gb.memory.extern_ram[addr-0xA000]
 	case 0xC000..=0xDFFF:
 		return gb.memory.work_ram[addr-0xC000]
+	case 0xfea0..=0xfeff:
+		// unused memory addresses
+		return 0xff
 	case 0xFF00..=0xFF7F:
 		return read_io_reg(gb, addr)
 	case 0xFF80..=0xFFFE:
@@ -340,6 +343,8 @@ write_byte :: proc(gb: ^Gameboy, addr: u16, data: byte) {
 		gb.memory.extern_ram[addr-0xA000] = data
 	case 0xC000..=0xDFFF:
 		gb.memory.work_ram[addr-0xC000] = data
+	case 0xfea0..=0xfeff:
+		// unused area of memory, writes do nothing
 	case 0xFF00..=0xFF7F:
 		write_io_reg(gb, addr, data)
 	case 0xFF80..=0xFFFE:
