@@ -122,10 +122,8 @@ Timer :: struct {
 	counter: u8,
 	modulo: u8,
 	control: u8,
-}
 
-PPU :: struct {
-	regs: [48]u8, // TODO: implement PPU/LCD
+	div_cycles: u8,
 }
 
 CPU :: struct {
@@ -184,8 +182,11 @@ main :: proc() {
 		fmt.eprintln("SDL error:", sdl.GetError())
 		panic("Error initializing SDL")
 	}
-	// 800x720 is 160x144 x 5
-	window := sdl.CreateWindow("Odinboy", 800, 720, nil)
+
+	scaling: i32 = 3
+	width: i32 = 160 * scaling
+	height: i32 = 144 * scaling
+	window := sdl.CreateWindow("Odinboy", width, height, nil)
 	if window == nil {
 		fmt.eprintln("SDL error:", sdl.GetError())
 		panic("Error creating window")
@@ -200,7 +201,7 @@ main :: proc() {
 	audio_spec := sdl.AudioSpec {
 		format = .F32,
 		channels = 2,
-		freq = 48000,
+		freq = 1024*1024,
 	}
 	gb.audio.stream = sdl.OpenAudioDeviceStream(
 		sdl.AUDIO_DEVICE_DEFAULT_PLAYBACK,
@@ -214,11 +215,8 @@ main :: proc() {
 	defer sdl.DestroyAudioStream(gb.audio.stream)
 
 	sdl.PauseAudioStreamDevice(gb.audio.stream)
-	current_sine_sample: int
 
 	sdl.SetRenderDrawColor(renderer, 0, 55, 75, 255)
-	sdl.RenderClear(renderer)
-	sdl.RenderPresent(renderer)
 
 	event: sdl.Event
 	running := true
@@ -242,7 +240,11 @@ main :: proc() {
 			instr = cb_instructions[opcode]
 		}
 		if instr.function == nil {
-			fmt.eprintfln("Opcode: 0x%02x", opcode)
+			fmt.eprint("Opcode: ")
+			if read_byte(&gb, gb.cpu.registers.pc) == 0xcb {
+				fmt.eprint("CB ")
+			}
+			fmt.eprintfln("%02x", opcode)
 			panic("Instruction not yet implemented!")
 		}
 		if addr >= start_log {
@@ -271,6 +273,12 @@ main :: proc() {
 			ly %= 154 // 153 scanlines including v-blank
 			gb.ppu.regs[0x4] = ly
 			// if ly == 0 { fmt.println("frame!") }
+		}
+		// update div register every 64? m-cycles
+		gb.timer.div_cycles += instr.cycles // TODO: take into account jump cycles
+		if gb.timer.div_cycles >= 64 {
+			gb.timer.div_cycles %= 64
+			gb.timer.divider += 1
 		}
 		if addr >= start_log {
 			log.debugf("A: %02x B: %02x C: %02x D: %02x E: %02x HL: %04x SP: %04x",
@@ -311,6 +319,10 @@ read_byte :: proc(gb: ^Gameboy, addr: u16) -> u8 {
 		return gb.memory.extern_ram[addr-0xA000]
 	case 0xC000..=0xDFFF:
 		return gb.memory.work_ram[addr-0xC000]
+	case 0xe000..=0xfdff:
+		return gb.memory.work_ram[addr-0xe000]
+	case 0xfe00..=0xfe9f:
+		return gb.ppu.oam[addr-0xfe00]
 	case 0xfea0..=0xfeff:
 		// unused memory addresses
 		return 0xff
@@ -343,6 +355,10 @@ write_byte :: proc(gb: ^Gameboy, addr: u16, data: byte) {
 		gb.memory.extern_ram[addr-0xA000] = data
 	case 0xC000..=0xDFFF:
 		gb.memory.work_ram[addr-0xC000] = data
+	case 0xe000..=0xfdff:
+		gb.memory.work_ram[addr-0xe000] = data
+	case 0xfe00..=0xfe9f:
+		gb.ppu.oam[addr-0xfe00] = data
 	case 0xfea0..=0xfeff:
 		// unused area of memory, writes do nothing
 	case 0xFF00..=0xFF7F:
@@ -360,15 +376,21 @@ write_byte :: proc(gb: ^Gameboy, addr: u16, data: byte) {
 read_io_reg :: proc(gb: ^Gameboy, addr: u16) -> u8 {
 	data: u8
 	switch addr {
+	case 0xff04:
+		data = gb.timer.divider
+		fmt.printfln("read %02x from DIV register", data)
 	case 0xff10..=0xff3f:
 		data = gb.audio.regs[addr - 0xff10]
 		// log.debugf("\treading %02x from the audio register %04x", data, addr)
 	case 0xff40..=0xff6f:
 		data = gb.ppu.regs[addr - 0xff40]
 		// log.debugf("\treading %02x from the PPU register %04x", data, addr)
+	case 0xff7f:
+		fmt.println("tried reading from 0xff7f")
+		data = 0xff // TODO: find out if this should return something else
 	case:
-		fmt.eprintfln("Tried writing to I/O register at %04x", addr)
-		panic("writing to I/O register not yet implemented")
+		fmt.eprintfln("Tried reading I/O register at %04x", addr)
+		panic("reading from this I/O register not yet implemented")
 	}
 	return data
 }
@@ -379,6 +401,8 @@ write_io_reg :: proc(gb: ^Gameboy, addr: u16, data: u8) {
 		gb.serial.data = data
 	case 0xff02:
 		gb.serial.control = data
+	case 0xff04:
+		gb.timer.divider = 0
 	case 0xff06:
 		gb.timer.modulo = data
 	case 0xff07:
@@ -398,16 +422,18 @@ write_io_reg :: proc(gb: ^Gameboy, addr: u16, data: u8) {
 		log.debugf("RESET PPU LY")
 		gb.ppu.regs[addr - 0xff40] = 0
 	case 0xff50:
-		log.debugf("no more boot rom!")
 		gb.boot_rom_enabled = false
 	case 0xff40..=0xff6f:
 		// log.debugf("\twriting %02x to PPU register %04x", data, addr)
 		gb.ppu.regs[addr - 0xff40] = data
+	case 0xff7f:
+		// TODO: double-check if this should do something
+		fmt.printfln("tried writing %02x to 0xff7f", data)
 	case 0xff0f:
 		write_iflags(gb, data)
 	case:
 		fmt.eprintfln("Tried writing to I/O register at %04x", addr)
-		panic("writing to I/O register not yet implemented")
+		panic("writing to this I/O register not yet implemented")
 	}
 }
 
