@@ -76,8 +76,8 @@ instructions: [256]Instruction = {
 	{"INC L", 1, 1, 0, inc, .L},
 	{"DEC L", 1, 1, 0, dec, .L},
 	{"LD L, %02x", 2, 2, 0, ld_reg_d8, .L},
-	{"", 0, 0, 0, nil, .None},
-	{"JR NC, %02x", 2, 2, 3, nil, .None},					// 0x30
+	{"CPL", 1, 1, 0, cpl, .None},
+	{"JR NC, %02x", 2, 2, 3, jr_nc_r8, .None},					// 0x30
 	{"LD SP, %04x", 3, 3, 0, ld_reg_d16, .SP},
 	{"LD (HL-), A", 1, 2, 0, ld_hl_dec, .None},
 	{"INC SP", 1, 1, 0, inc, .SP},
@@ -141,13 +141,13 @@ instructions: [256]Instruction = {
 	{"LD L, L", 1, 1, 0, ld_reg_l, .L},
 	{"", 0, 0, 0, nil, .None},
 	{"LD L, A", 1, 1, 0, ld_reg_a, .L},
-	{"", 0, 0, 0, nil, .None},		// 0x70
-	{"", 0, 0, 0, nil, .None},
-	{"", 0, 0, 0, nil, .None},
-	{"", 0, 0, 0, nil, .None},
-	{"", 0, 0, 0, nil, .None},
-	{"", 0, 0, 0, nil, .None},
-	{"", 0, 0, 0, nil, .None},
+	{"LD (HL), B", 1, 2, 0, ld_mem, .B},		// 0x70
+	{"LD (HL), C", 1, 2, 0, ld_mem, .C},
+	{"LD (HL), D", 1, 2, 0, ld_mem, .D},
+	{"LD (HL), E", 1, 2, 0, ld_mem, .E},
+	{"LD (HL), H", 1, 2, 0, ld_mem, .H},
+	{"LD (HL), L", 1, 2, 0, ld_mem, .L},
+	{"HALT", 1, 1, 0, nil, .None},
 	{"LD (HL), A", 1, 2, 0, ld_mem, .A},
 	{"LD A, B", 1, 1, 0, ld_reg_b, .A},
 	{"LD A, C", 1, 1, 0, ld_reg_c, .A},
@@ -156,7 +156,7 @@ instructions: [256]Instruction = {
 	{"LD A, H", 1, 1, 0, ld_reg_h, .A},
 	{"LD A, L", 1, 1, 0, ld_reg_l, .A},
 	{"LD A, (HL)", 1, 2, 0, ld_reg_mem, .A},
-	{"", 0, 0, 0, nil, .None},
+	{"LD A, A", 1, 1, 0, ld_reg_a, .A},
 	{"ADD A, B", 1, 1, 0, add, .B},		// 0x80
 	{"ADD A, C", 1, 1, 0, add, .C},
 	{"ADD A, D", 1, 1, 0, add, .D},
@@ -205,14 +205,14 @@ instructions: [256]Instruction = {
 	{"XOR A, L", 1, 1, 0, xor, .L},
 	{"XOR A, (HL)", 1, 2, 0, xor, .HL},
 	{"XOR A, A", 1, 1, 0, xor, .A},
-	{"", 0, 0, 0, nil, .None},		// 0xb0
+	{"OR A, B", 1, 1, 0, or, .B},		// 0xb0
 	{"OR A, C", 1, 1, 0, or, .C},
-	{"", 0, 0, 0, nil, .None},
-	{"", 0, 0, 0, nil, .None},
-	{"", 0, 0, 0, nil, .None},
-	{"", 0, 0, 0, nil, .None},
-	{"", 0, 0, 0, nil, .None},
-	{"", 0, 0, 0, nil, .None},
+	{"OR A, D", 1, 1, 0, or, .D},
+	{"OR A, E", 1, 1, 0, or, .E},
+	{"OR A, H", 1, 1, 0, or, .H},
+	{"OR A, L", 1, 1, 0, or, .L},
+	{"OR A, (HL)", 1, 1, 0, or, .HL},
+	{"OR A, A", 1, 1, 0, or, .A},
 	{"", 0, 0, 0, nil, .None},
 	{"", 0, 0, 0, nil, .None},
 	{"", 0, 0, 0, nil, .None},
@@ -221,7 +221,7 @@ instructions: [256]Instruction = {
 	{"", 0, 0, 0, nil, .None},
 	{"CP A, (HL)", 1, 2, 0, cp_mem, .None},
 	{"", 0, 0, 0, nil, .None},
-	{"RET NZ", 1, 2, 5, nil, .None},		// 0xc0
+	{"RET NZ", 1, 2, 5, ret_nz, .None},		// 0xc0
 	{"POP BC", 1, 3, 0, pop, .BC},
 	{"", 0, 0, 0, nil, .None},
 	{"JP %04x", 3, 4, 0, jp, .None},
@@ -278,7 +278,7 @@ instructions: [256]Instruction = {
 	{"OR A, d8", 2, 2, 0, nil, .None},
 	{"RST 30h", 1, 4, 0, rst_30h, .None},
 	{"LD HL, SP+%02x", 2, 3, 0, nil, .None},
-	{"LD SP, HL", 1, 2, 0, nil, .None},
+	{"LD SP, HL", 1, 2, 0, ld_sp, .HL},
 	{"LD A, (%04)", 3, 4, 0, ld_a_d16, .None},
 	{"EI", 1, 1, 0, ei, .None},
 	{"", 0, 0, 0, nil, .None},
@@ -336,14 +336,14 @@ cb_instructions := [256]Instruction {
 	{"", 2, 0, 0, nil, .None},
 	{"", 2, 0, 0, nil, .None},
 	{"", 2, 0, 0, nil, .None},
-	{"", 2, 0, 0, nil, .None}, // 0x30
-	{"", 2, 0, 0, nil, .None},
-	{"", 2, 0, 0, nil, .None},
-	{"", 2, 0, 0, nil, .None},
-	{"", 2, 0, 0, nil, .None},
-	{"", 2, 0, 0, nil, .None},
-	{"", 2, 0, 0, nil, .None},
-	{"", 2, 0, 0, nil, .None},
+	{"SWAP B", 2, 2, 0, swap, .B}, // 0x30
+	{"SWAP C", 2, 2, 0, swap, .C},
+	{"SWAP D", 2, 2, 0, swap, .D},
+	{"SWAP E", 2, 2, 0, swap, .E},
+	{"SWAP H", 2, 2, 0, swap, .H},
+	{"SWAP L", 2, 2, 0, swap, .L},
+	{"SWAP (HL)", 2, 4, 0, swap, .HL},
+	{"SWAP A", 2, 2, 0, swap, .A},
 	{"", 2, 0, 0, nil, .None},
 	{"", 2, 0, 0, nil, .None},
 	{"", 2, 0, 0, nil, .None},
@@ -683,6 +683,17 @@ reti :: proc(instr: ^Instruction, gb: ^Gameboy) {
 	gb.cpu.interrupts_enable = true
 }
 
+ret_nz :: proc(instr: ^Instruction, gb: ^Gameboy) {
+	if !(.Z in gb.cpu.registers.flags) {
+		addr := read_stack_word(gb)
+		gb.cpu.registers.pc = addr
+		gb.cpu.cycles += uint(instr.jump_cycles)
+	} else {
+		gb.cpu.registers.pc += u16(instr.length)
+		gb.cpu.cycles += uint(instr.cycles)
+	}
+}
+
 ret_z :: proc(instr: ^Instruction, gb: ^Gameboy) {
 	if .Z in gb.cpu.registers.flags {
 		addr := read_stack_word(gb)
@@ -745,7 +756,14 @@ and :: proc(instr: ^Instruction, gb: ^Gameboy) {
 }
 
 or :: proc(instr: ^Instruction, gb: ^Gameboy) {
-	data := read_reg8(gb, instr.reg)
+	data: u8
+	if instr.reg == .None {
+		data = read_byte(gb, gb.cpu.registers.pc + 1)
+	} else if instr.reg == .HL {
+		data = read_byte(gb, gb.cpu.registers.hl)
+	} else {
+		data = read_reg8(gb, instr.reg)
+	}
 	gb.cpu.registers.a |= data
 	gb.cpu.registers.flags = gb.cpu.registers.a == 0 ? { .Z } : {}
 	gb.cpu.registers.pc += u16(instr.length)
@@ -763,6 +781,13 @@ xor :: proc(instr: ^Instruction, gb: ^Gameboy) {
 	}
 	gb.cpu.registers.a ~= data
 	gb.cpu.registers.flags = gb.cpu.registers.a == 0 ? { .Z } : {}
+	gb.cpu.registers.pc += u16(instr.length)
+	gb.cpu.cycles += uint(instr.cycles)
+}
+
+cpl :: proc(instr: ^Instruction, gb: ^Gameboy) {
+	gb.cpu.registers.a = ~gb.cpu.registers.a
+	gb.cpu.registers.flags += { .N, .H }
 	gb.cpu.registers.pc += u16(instr.length)
 	gb.cpu.cycles += uint(instr.cycles)
 }
@@ -814,6 +839,26 @@ bit_7 :: proc(instr: ^Instruction, gb: ^Gameboy) {
 	if z { flags += { .Z } }
 	if c { flags += { .C } }
 	gb.cpu.registers.flags = flags
+	gb.cpu.registers.pc += u16(instr.length)
+	gb.cpu.cycles += uint(instr.cycles)
+}
+
+swap :: proc(instr: ^Instruction, gb: ^Gameboy) {
+	data: u8
+	if instr.reg == .HL {
+		data = read_byte(gb, gb.cpu.registers.hl)
+	} else {
+		data = read_reg8(gb, instr.reg)
+	}
+	upper := data >> 4
+	lower := data << 4
+	data = upper + lower
+	if instr.reg == .HL {
+		write_byte(gb, gb.cpu.registers.hl, data)
+	} else {
+		write_reg8(gb, instr.reg, data)
+	}
+	gb.cpu.registers.flags = data == 0 ? { .Z } : {}
 	gb.cpu.registers.pc += u16(instr.length)
 	gb.cpu.cycles += uint(instr.cycles)
 }
@@ -1049,6 +1094,19 @@ cp_mem :: proc(instr: ^Instruction, gb: ^Gameboy) {
 	gb.cpu.registers.pc += u16(instr.length)
 }
 
+jr_nc_r8 :: proc(instr: ^Instruction, gb: ^Gameboy) {
+	offset := i8(read_byte(gb, gb.cpu.registers.pc + 1))
+	gb.cpu.registers.pc += u16(instr.length)
+	if !(.C in gb.cpu.registers.flags) {
+		// log.debugf("Jumping %v bytes!", offset)
+		addr := i16(gb.cpu.registers.pc) + i16(offset)
+		gb.cpu.registers.pc = u16(addr)
+		gb.cpu.cycles += uint(instr.jump_cycles)
+	} else {
+		gb.cpu.cycles += uint(instr.cycles)
+	}
+}
+
 jr_nz_r8 :: proc(instr: ^Instruction, gb: ^Gameboy) {
 	offset := i8(read_byte(gb, gb.cpu.registers.pc + 1))
 	gb.cpu.registers.pc += u16(instr.length)
@@ -1110,6 +1168,13 @@ ld_reg_d8 :: proc(instr: ^Instruction, gb: ^Gameboy) {
 	addr := gb.cpu.registers.pc + 1
 	data := read_byte(gb, addr)
 	write_reg8(gb, instr.reg, data)
+	gb.cpu.registers.pc += u16(instr.length)
+	gb.cpu.cycles += uint(instr.cycles)
+}
+
+ld_sp :: proc(instr: ^Instruction, gb: ^Gameboy) {
+	data := read_reg16(gb, .HL)
+	write_reg16(gb, .SP, data)
 	gb.cpu.registers.pc += u16(instr.length)
 	gb.cpu.cycles += uint(instr.cycles)
 }

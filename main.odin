@@ -93,7 +93,6 @@ Memory :: struct {
 	// sprite attrib table (OAM)
 	// IO ports
 	high_ram: [128]byte,
-	interrupt_enable_register: byte,
 }
 
 Audio :: struct {
@@ -117,13 +116,21 @@ Serial :: struct {
 	control: u8,
 }
 
+Timer_Clock :: enum {
+	M256,
+	M4,
+	M16,
+	M64
+}
+
 Timer :: struct {
 	divider: u8,
-	counter: u8,
+	counter: u16,
 	modulo: u8,
-	control: u8,
-
+	enable: bool,
+	clock_select: Timer_Clock,
 	div_cycles: u8,
+	cycles: u16,
 }
 
 CPU :: struct {
@@ -131,6 +138,7 @@ CPU :: struct {
 	cycles: uint,
 	interrupt_flags: IFlags,
 	interrupts_enable: bool,
+	interrupt_enable_register: byte,
 }
 
 Gameboy :: struct {
@@ -138,6 +146,7 @@ Gameboy :: struct {
 	ppu: PPU,
 	memory: Memory,
 	cart: Cartridge,
+	joypad_reg: u8,
 
 	serial: Serial,
 	timer: Timer,
@@ -228,12 +237,15 @@ main :: proc() {
 				running = false
 			}
 		}
+
+		check_interrupts(&gb)
+
 		addr := gb.cpu.registers.pc
 		opcode := read_byte(&gb, addr)
 		operand: u16
 		instr := instructions[opcode]
 
-		start_log: u16 = 0x100
+		start_log: u16 = 0xffff
 
 		if opcode == 0xcb {
 			opcode = read_byte(&gb, gb.cpu.registers.pc + 1)
@@ -279,6 +291,35 @@ main :: proc() {
 		if gb.timer.div_cycles >= 64 {
 			gb.timer.div_cycles %= 64
 			gb.timer.divider += 1
+		}
+		if gb.timer.enable {
+			gb.timer.cycles += u16(instr.cycles)// TODO: take into account jump cycles
+			switch gb.timer.clock_select {
+			case .M256:
+				if gb.timer.cycles >= 256 {
+					gb.timer.cycles %= 256
+					gb.timer.counter += 1
+				}
+			case .M4:
+				if gb.timer.cycles >= 4 {
+					gb.timer.cycles %= 4
+					gb.timer.counter += 1
+				}
+			case .M16:
+				if gb.timer.cycles >= 16 {
+					gb.timer.cycles %= 16
+					gb.timer.counter += 1
+				}
+			case .M64:
+				if gb.timer.cycles >= 64 {
+					gb.timer.cycles %= 64
+					gb.timer.counter += 1
+				}
+			}
+			if gb.timer.counter > 0xff {
+				gb.timer.counter = u16(gb.timer.modulo)
+				gb.cpu.interrupt_flags += { .Timer }
+			}
 		}
 		if addr >= start_log {
 			log.debugf("A: %02x B: %02x C: %02x D: %02x E: %02x HL: %04x SP: %04x",
@@ -331,7 +372,7 @@ read_byte :: proc(gb: ^Gameboy, addr: u16) -> u8 {
 	case 0xFF80..=0xFFFE:
 		return gb.memory.high_ram[addr-0xFF80]
 	case 0xffff:
-		return gb.memory.interrupt_enable_register
+		return gb.cpu.interrupt_enable_register
 	case:
 		fmt.eprintfln("Tried reading byte from addr: %04x", addr)
 		panic("Outside current memory map implementation!")
@@ -366,7 +407,7 @@ write_byte :: proc(gb: ^Gameboy, addr: u16, data: byte) {
 	case 0xFF80..=0xFFFE:
 		gb.memory.high_ram[addr-0xFF80] = data
 	case 0xffff:
-		gb.memory.interrupt_enable_register = data
+		gb.cpu.interrupt_enable_register = data
 	case:
 		fmt.eprintfln("Tried writing byte to addr: %04x", addr)
 		panic("Outside current writing memory map implementation!")
@@ -376,9 +417,31 @@ write_byte :: proc(gb: ^Gameboy, addr: u16, data: byte) {
 read_io_reg :: proc(gb: ^Gameboy, addr: u16) -> u8 {
 	data: u8
 	switch addr {
+	case 0xff00:
+		data = gb.joypad_reg
+	case 0xff01:
+		data = gb.serial.data
+	case 0xff02:
+		data = gb.serial.control
 	case 0xff04:
 		data = gb.timer.divider
 		fmt.printfln("read %02x from DIV register", data)
+	case 0xff05:
+		data = u8(gb.timer.counter)
+	case 0xff06:
+		data = gb.timer.modulo
+	case 0xff07:
+		data = gb.timer.enable ? (1 << 2) : 0
+		switch gb.timer.clock_select {
+		case .M256:
+			data += 0
+		case .M4:
+			data += 1
+		case .M16:
+			data += 2
+		case .M64:
+			data += 3
+		}
 	case 0xff10..=0xff3f:
 		data = gb.audio.regs[addr - 0xff10]
 		// log.debugf("\treading %02x from the audio register %04x", data, addr)
@@ -397,16 +460,26 @@ read_io_reg :: proc(gb: ^Gameboy, addr: u16) -> u8 {
 
 write_io_reg :: proc(gb: ^Gameboy, addr: u16, data: u8) {
 	switch addr {
+	case 0xff00:
+		gb.joypad_reg = data & 0x30 + gb.joypad_reg & 0x0f
 	case 0xff01:
 		gb.serial.data = data
+		fmt.printfln("wrote %v to serial register", data)
 	case 0xff02:
 		gb.serial.control = data
+		fmt.printfln("wrote %02x to serial control register", data)
+	case 0xff03:
+		fmt.printfln("tried writing %02x to ff03", data)
 	case 0xff04:
 		gb.timer.divider = 0
 	case 0xff06:
 		gb.timer.modulo = data
 	case 0xff07:
-		gb.timer.control = data
+		write_timer_control(gb, data)
+	case 0xff0e:
+		fmt.eprintfln("writing %02x to %04x", data, addr)
+	case 0xff0f:
+		write_iflags(gb, data)
 	case 0xff26:
 		if data & 0x80 == 0 {
 			gb.audio.on = false
@@ -426,11 +499,9 @@ write_io_reg :: proc(gb: ^Gameboy, addr: u16, data: u8) {
 	case 0xff40..=0xff6f:
 		// log.debugf("\twriting %02x to PPU register %04x", data, addr)
 		gb.ppu.regs[addr - 0xff40] = data
-	case 0xff7f:
-		// TODO: double-check if this should do something
-		fmt.printfln("tried writing %02x to 0xff7f", data)
-	case 0xff0f:
-		write_iflags(gb, data)
+	case 0xff4d..=0xff7f:
+		// TODO: GBC registers
+		fmt.printfln("GBC reg write %04x %02x", addr, data)
 	case:
 		fmt.eprintfln("Tried writing to I/O register at %04x", addr)
 		panic("writing to this I/O register not yet implemented")
@@ -439,11 +510,21 @@ write_io_reg :: proc(gb: ^Gameboy, addr: u16, data: u8) {
 
 write_iflags :: proc(gb: ^Gameboy, data: u8) {
 	flags: IFlags
-	if data & 0x1 != 0 { flags += { .VBlank } }
-	if data & 0x2 != 0 { flags += { .LCDStat } }
-	if data & 0x4 != 0 { flags += { .Timer } }
-	if data & 0x8 != 0 { flags += { .Serial } }
-	if data & 0x10 != 0 { flags += { .Joypad } }
+	if data & 0x1 != 0 {
+		flags += { .VBlank }
+	}
+	if data & 0x2 != 0 {
+		flags += { .LCDStat }
+	}
+	if data & 0x4 != 0 {
+		flags += { .Timer }
+	}
+	if data & 0x8 != 0 {
+		flags += { .Serial }
+	}
+	if data & 0x10 != 0 {
+		flags += { .Joypad }
+	}
 	gb.cpu.interrupt_flags = flags
 }
 
@@ -469,4 +550,68 @@ read_rom :: proc(gb: ^Gameboy, addr: u16) -> byte {
 		new_addr += 0x4000 * u16(gb.cart.rom_bank - 1)
 	}
 	return gb.memory.game_rom[new_addr]
+}
+
+write_timer_control :: proc(gb: ^Gameboy, data: u8) {
+	gb.timer.enable = data & 0x04 != 0
+	switch data & 0x03 {
+	case 0:
+		gb.timer.clock_select = .M256
+	case 1:
+		gb.timer.clock_select = .M4
+	case 2:
+		gb.timer.clock_select = .M16
+	case 3:
+		gb.timer.clock_select = .M64
+	}
+}
+
+check_interrupts :: proc(gb: ^Gameboy) {
+	if !gb.cpu.interrupts_enable { return }
+	switch {
+	case .VBlank in gb.cpu.interrupt_flags:
+		if gb.cpu.interrupt_enable_register & (1 << 0) != 0 {
+			call_interrupt(gb, .VBlank)
+		}
+	case .LCDStat in gb.cpu.interrupt_flags:
+		if gb.cpu.interrupt_enable_register & (1 << 1) != 0 {
+			call_interrupt(gb, .LCDStat)
+		}
+	case .Timer in gb.cpu.interrupt_flags:
+		if gb.cpu.interrupt_enable_register & (1 << 2) != 0 {
+			call_interrupt(gb, .Timer)
+		}
+	case .Serial in gb.cpu.interrupt_flags:
+		if gb.cpu.interrupt_enable_register & (1 << 3) != 0 {
+			call_interrupt(gb, .Serial)
+		}
+	case .Joypad in gb.cpu.interrupt_flags:
+		if gb.cpu.interrupt_enable_register & (1 << 4) != 0 {
+			call_interrupt(gb, .Joypad)
+		}
+	}
+}
+
+call_interrupt :: proc(gb: ^Gameboy, interrupt: IFlag) {
+	gb.cpu.interrupts_enable = false
+	gb.cpu.interrupt_flags &~= { interrupt }
+	gb.cpu.cycles += 5
+	write_stack_word(gb, gb.cpu.registers.pc)
+	switch interrupt {
+	case .VBlank:
+		gb.cpu.registers.pc = 0x40
+		fmt.println("VBlank interrupt!")
+	case .LCDStat:
+		gb.cpu.registers.pc = 0x48
+		fmt.println("LCDStat interrupt!")
+	case .Timer:
+		gb.cpu.registers.pc = 0x50
+		fmt.println("Timer interrupt!")
+	case .Serial:
+		gb.cpu.registers.pc = 0x58
+		fmt.println("Serial interrupt!")
+	case .Joypad:
+		gb.cpu.registers.pc = 0x60
+		fmt.println("Joypad interrupt!")
+	}
 }
